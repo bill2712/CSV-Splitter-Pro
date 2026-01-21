@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CSV Splitter Pro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind Configuration -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
+                    colors: {
+                        brand: { 50: '#eff6ff', 100: '#dbeafe', 500: '#3b82f6', 600: '#2563eb', 700: '#1d4ed8' }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Import Map for ES Modules -->
+    <script type="importmap">
+{
+  "imports": {
+    "@google/genai": "https://esm.sh/@google/genai@0.1.1",
+    "papaparse": "https://esm.sh/papaparse@5.4.1",
+    "jszip": "https://esm.sh/jszip@3.10.1",
+    "file-saver": "https://esm.sh/file-saver@2.0.5",
+    "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "react": "https://esm.sh/react@^19.2.3"
+  }
+}
+</script>
+
+    <style>
+        body { background-color: #f8fafc; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        .fade-in { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .hidden { display: none !important; }
+        
+        /* Loading Spinner */
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid #ffffff;
+            border-bottom-color: transparent;
+            border-radius: 50%;
+            display: inline-block;
+            box-sizing: border-box;
+            animation: rotation 1s linear infinite;
+        }
+        .spinner-blue {
+            border-color: #2563eb;
+            border-bottom-color: transparent;
+        }
+
+        @keyframes rotation { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="text-slate-800 antialiased min-h-screen flex flex-col">
+
+    <!-- Header -->
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-20 shadow-sm">
+        <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-2 cursor-pointer" onclick="window.location.reload()">
+                <div class="bg-brand-600 text-white p-1.5 rounded-lg">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
+                </div>
+                <h1 class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-brand-600 to-indigo-600">CSV Splitter Pro</h1>
+            </div>
+            <div class="text-xs text-slate-500 hidden sm:block">Fast, Secure, Client-side processing</div>
+        </div>
+    </header>
+
+    <main class="flex-grow max-w-6xl mx-auto px-4 py-8 w-full">
+        
+        <!-- View: Upload -->
+        <div id="view-upload" class="max-w-2xl mx-auto mt-10 fade-in">
+            <div class="text-center mb-10">
+                <h2 class="text-3xl font-bold text-slate-900 mb-4">Split large CSV files instantly</h2>
+                <p class="text-lg text-slate-600">
+                    Upload your CSV, define your split size, and download chunks. 
+                    <br>Headers are preserved in every file.
+                </p>
+            </div>
+
+            <div id="drop-zone" class="w-full border-2 border-dashed border-slate-300 hover:border-brand-500 bg-white hover:bg-brand-50 rounded-2xl p-12 transition-all duration-200 cursor-pointer group flex flex-col items-center justify-center text-center shadow-sm">
+                <input id="file-input" type="file" accept=".csv" class="hidden" />
+                <div class="w-16 h-16 bg-slate-50 rounded-full shadow-sm flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-brand-500"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+                </div>
+                <h3 class="text-xl font-semibold text-slate-800 mb-2">Upload your CSV</h3>
+                <p class="text-slate-500">Drag and drop or click to browse</p>
+                <div id="upload-error" class="mt-4 text-red-500 text-sm hidden"></div>
+            </div>
+        </div>
+
+        <!-- View: Workspace (Hidden initially) -->
+        <div id="view-workspace" class="hidden grid grid-cols-1 lg:grid-cols-3 gap-8 fade-in">
+            
+            <!-- Left Column -->
+            <div class="lg:col-span-2 space-y-6">
+                
+                <!-- File Info -->
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex items-center justify-between">
+                    <div class="flex items-center gap-4">
+                        <div class="bg-green-100 p-3 rounded-full">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-green-600"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
+                        </div>
+                        <div>
+                            <h3 id="file-name" class="font-semibold text-slate-800 truncate max-w-[200px] sm:max-w-xs">filename.csv</h3>
+                            <p id="file-stats" class="text-sm text-slate-500">0 rows • 0 columns</p>
+                        </div>
+                    </div>
+                    <button id="btn-reset" class="text-slate-400 hover:text-red-500 transition-colors p-2 hover:bg-red-50 rounded-full">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                    </button>
+                </div>
+
+                <!-- AI Analysis -->
+                <div class="bg-gradient-to-br from-indigo-50 to-purple-50 p-6 rounded-xl border border-indigo-100 shadow-sm">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center gap-2 text-indigo-900">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-indigo-600"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
+                            <h2 class="text-lg font-semibold">AI Insights</h2>
+                        </div>
+                        <button id="btn-analyze" class="text-xs font-medium text-indigo-600 hover:text-indigo-800 bg-white px-3 py-1.5 rounded-full border border-indigo-200 shadow-sm hover:shadow transition-all">
+                            Analyze Dataset
+                        </button>
+                    </div>
+                    <div id="ai-content" class="text-sm text-slate-600">
+                        <p id="ai-placeholder">Get a quick AI-powered summary of your CSV columns and data distribution.</p>
+                        <div id="ai-loading" class="hidden flex items-center gap-2 mt-2">
+                            <span class="spinner spinner-blue w-4 h-4 border-2"></span>
+                            <span>Thinking...</span>
+                        </div>
+                        <div id="ai-result" class="hidden mt-2 p-3 bg-white/60 rounded-lg border border-indigo-100/50 prose prose-sm max-w-none text-slate-700"></div>
+                    </div>
+                </div>
+
+                <!-- Configuration -->
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+                    <div class="flex items-center gap-2 mb-4">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-brand-500"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.72v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+                        <h2 class="text-lg font-semibold">Configuration</h2>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-600 mb-2">Rows per file (excl. header)</label>
+                            <input id="input-rows" type="number" min="1" value="100" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none mb-3" />
+                            <div class="flex gap-2">
+                                <button class="preset-btn px-2 py-1 text-xs border rounded hover:bg-slate-50" data-val="50">50</button>
+                                <button class="preset-btn px-2 py-1 text-xs border rounded hover:bg-slate-50" data-val="100">100</button>
+                                <button class="preset-btn px-2 py-1 text-xs border rounded hover:bg-slate-50" data-val="1000">1k</button>
+                                <button class="preset-btn px-2 py-1 text-xs border rounded hover:bg-slate-50" data-val="5000">5k</button>
+                            </div>
+                        </div>
+                        <div class="bg-slate-50 p-4 rounded-lg border border-slate-100 flex flex-col justify-center">
+                            <span class="text-xs uppercase font-bold text-slate-400 mb-1">Estimated Output</span>
+                            <div class="flex items-baseline gap-2">
+                                <span id="est-count" class="text-3xl font-bold text-slate-800">0</span>
+                                <span class="text-sm text-slate-600">files</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-6 pt-4 border-t border-slate-100 flex justify-end">
+                        <button id="btn-split" class="bg-brand-600 hover:bg-brand-700 text-white px-6 py-2.5 rounded-lg shadow-sm font-medium flex items-center gap-2 transition-all active:scale-95">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><line x1="12" x2="12" y1="3" y2="21"/><line x1="3" x2="21" y1="12" y2="12"/></svg>
+                            <span>Split CSV</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Preview Table -->
+                <div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+                    <div class="px-6 py-3 bg-slate-50 border-b border-slate-100 font-semibold text-slate-700 text-sm">
+                        Data Preview (First 5 Rows)
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm text-left whitespace-nowrap">
+                            <thead id="preview-head" class="text-xs text-slate-500 uppercase bg-slate-50/50"></thead>
+                            <tbody id="preview-body" class="text-slate-600"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Right Column: Results -->
+            <div class="lg:col-span-1">
+                <div class="sticky top-24">
+                    <div id="results-card" class="bg-white rounded-xl shadow-lg border border-brand-100 overflow-hidden flex flex-col max-h-[80vh] opacity-50 pointer-events-none transition-all">
+                        <div class="p-4 bg-gradient-to-r from-brand-600 to-indigo-600 text-white flex justify-between items-center">
+                            <div>
+                                <h3 class="font-bold">Results</h3>
+                                <p id="result-count" class="text-xs text-brand-100">No files generated</p>
+                            </div>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-brand-200"><polyline points="20 6 9 17 4 12"/></svg>
+                        </div>
+                        
+                        <div class="p-3 bg-slate-50 border-b border-slate-100">
+                            <button id="btn-download-all" class="w-full py-2 bg-white border border-slate-300 text-brand-600 font-medium rounded-lg hover:bg-brand-50 flex items-center justify-center gap-2 transition-colors">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg>
+                                Download All ZIP
+                            </button>
+                        </div>
+
+                        <div id="file-list" class="overflow-y-auto p-2 space-y-2 grow bg-white">
+                            <!-- Files inserted here -->
+                            <div class="text-center py-8 text-slate-400">
+                                <p class="text-sm">Click "Split CSV" to generate files.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- App Logic -->
+    <script type="module">
+        import { GoogleGenAI } from "@google/genai";
+        import Papa from "papaparse";
+        import JSZip from "jszip";
+        import { saveAs } from "file-saver";
+
+        // --- State Management ---
+        const state = {
+            file: null,
+            csvData: null, // { header: [], rows: [], fileName: "" }
+            splitFiles: [], // { name, content, rowCount, size }
+            rowsPerFile: 100
+        };
+
+        // --- DOM Elements ---
+        const els = {
+            dropZone: document.getElementById('drop-zone'),
+            fileInput: document.getElementById('file-input'),
+            viewUpload: document.getElementById('view-upload'),
+            viewWorkspace: document.getElementById('view-workspace'),
+            fileName: document.getElementById('file-name'),
+            fileStats: document.getElementById('file-stats'),
+            previewHead: document.getElementById('preview-head'),
+            previewBody: document.getElementById('preview-body'),
+            inputRows: document.getElementById('input-rows'),
+            estCount: document.getElementById('est-count'),
+            btnSplit: document.getElementById('btn-split'),
+            resultsCard: document.getElementById('results-card'),
+            fileList: document.getElementById('file-list'),
+            resultCount: document.getElementById('result-count'),
+            btnDownloadAll: document.getElementById('btn-download-all'),
+            btnReset: document.getElementById('btn-reset'),
+            btnAnalyze: document.getElementById('btn-analyze'),
+            aiLoading: document.getElementById('ai-loading'),
+            aiResult: document.getElementById('ai-result'),
+            aiPlaceholder: document.getElementById('ai-placeholder'),
+            uploadError: document.getElementById('upload-error')
+        };
+
+        // --- Event Listeners ---
+        
+        // Drag & Drop
+        els.dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            els.dropZone.classList.add('border-brand-500', 'bg-brand-50');
+        });
+
+        els.dropZone.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            els.dropZone.classList.remove('border-brand-500', 'bg-brand-50');
+        });
+
+        els.dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            els.dropZone.classList.remove('border-brand-500', 'bg-brand-50');
+            const file = e.dataTransfer.files[0];
+            handleFile(file);
+        });
+
+        els.dropZone.addEventListener('click', () => els.fileInput.click());
+        els.fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length) handleFile(e.target.files[0]);
+        });
+
+        // Config
+        els.inputRows.addEventListener('input', (e) => {
+            const val = parseInt(e.target.value) || 100;
+            state.rowsPerFile = val;
+            updateEstimate();
+        });
+
+        document.querySelectorAll('.preset-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const val = parseInt(btn.dataset.val);
+                state.rowsPerFile = val;
+                els.inputRows.value = val;
+                updateEstimate();
+            });
+        });
+
+        // Actions
+        els.btnSplit.addEventListener('click', performSplit);
+        els.btnDownloadAll.addEventListener('click', downloadZip);
+        els.btnReset.addEventListener('click', resetApp);
+        els.btnAnalyze.addEventListener('click', analyzeData);
+
+        // --- Core Functions ---
+
+        function handleFile(file) {
+            if (!file) return;
+            if (file.type !== "text/csv" && !file.name.endsWith('.csv')) {
+                showError("Please upload a valid .csv file");
+                return;
+            }
+
+            state.file = file;
+            els.uploadError.classList.add('hidden');
+            
+            // Show loading state implies simply waiting for parse
+            Papa.parse(file, {
+                skipEmptyLines: true,
+                complete: (results) => {
+                    if (results.data && results.data.length > 0) {
+                        const allRows = results.data;
+                        const header = allRows[0];
+                        const rows = allRows.slice(1);
+                        
+                        state.csvData = { header, rows, fileName: file.name };
+                        
+                        // Switch View
+                        els.viewUpload.classList.add('hidden');
+                        els.viewWorkspace.classList.remove('hidden');
+                        
+                        renderWorkspace();
+                    } else {
+                        showError("CSV file appears to be empty or invalid.");
+                    }
+                },
+                error: (err) => showError("Error parsing CSV: " + err.message)
+            });
+        }
+
+        function showError(msg) {
+            els.uploadError.textContent = msg;
+            els.uploadError.classList.remove('hidden');
+        }
+
+        function renderWorkspace() {
+            // Update Info
+            els.fileName.textContent = state.csvData.fileName;
+            els.fileStats.textContent = `${state.csvData.rows.length.toLocaleString()} rows • ${state.csvData.header.length} columns`;
+            
+            // Render Preview Table
+            els.previewHead.innerHTML = `<tr>${state.csvData.header.map(h => `<th class="px-6 py-3 font-medium border-b">${h}</th>`).join('')}</tr>`;
+            els.previewBody.innerHTML = state.csvData.rows.slice(0, 5).map(row => 
+                `<tr class="border-b hover:bg-slate-50">${row.map(c => `<td class="px-6 py-3 border-slate-50 max-w-xs truncate">${c}</td>`).join('')}</tr>`
+            ).join('');
+
+            updateEstimate();
+            
+            // Reset Results
+            els.resultsCard.classList.add('opacity-50', 'pointer-events-none');
+            els.fileList.innerHTML = '<div class="text-center py-8 text-slate-400"><p class="text-sm">Click "Split CSV" to generate files.</p></div>';
+            els.resultCount.textContent = "No files generated";
+            
+            // Reset AI
+            els.aiResult.classList.add('hidden');
+            els.aiPlaceholder.classList.remove('hidden');
+            els.aiResult.innerHTML = '';
+        }
+
+        function updateEstimate() {
+            if (!state.csvData) return;
+            const count = Math.ceil(state.csvData.rows.length / state.rowsPerFile);
+            els.estCount.textContent = count.toLocaleString();
+        }
+
+        function performSplit() {
+            if (!state.csvData) return;
+
+            const btnText = els.btnSplit.querySelector('span');
+            const originalText = btnText.textContent;
+            btnText.textContent = "Processing...";
+            els.btnSplit.disabled = true;
+
+            setTimeout(() => {
+                const { header, rows, fileName } = state.csvData;
+                const chunks = [];
+                const totalChunks = Math.ceil(rows.length / state.rowsPerFile);
+                const baseName = fileName.replace('.csv', '');
+
+                for (let i = 0; i < totalChunks; i++) {
+                    const chunkRows = rows.slice(i * state.rowsPerFile, (i + 1) * state.rowsPerFile);
+                    const fileContent = Papa.unparse([header, ...chunkRows]);
+                    
+                    const suffix = (i + 1).toString().padStart(totalChunks.toString().length, '0');
+                    const newName = `${baseName}_part_${suffix}.csv`;
+                    
+                    chunks.push({
+                        name: newName,
+                        content: fileContent,
+                        rowCount: chunkRows.length,
+                        size: new Blob([fileContent]).size
+                    });
+                }
+
+                state.splitFiles = chunks;
+                renderResults();
+                
+                btnText.textContent = originalText;
+                els.btnSplit.disabled = false;
+            }, 50); // Small delay to allow UI update
+        }
+
+        function renderResults() {
+            els.resultsCard.classList.remove('opacity-50', 'pointer-events-none');
+            els.resultCount.textContent = `${state.splitFiles.length} files created`;
+            
+            els.fileList.innerHTML = state.splitFiles.map((file, idx) => `
+                <div class="flex items-center justify-between p-3 rounded-lg border border-slate-100 hover:border-brand-300 hover:bg-brand-50/50 transition-all bg-white group">
+                    <div class="min-w-0 pr-2">
+                        <p class="text-sm font-medium text-slate-700 truncate" title="${file.name}">${file.name}</p>
+                        <p class="text-xs text-slate-500">${file.rowCount} rows • ${(file.size/1024).toFixed(1)} KB</p>
+                    </div>
+                    <button onclick="window.downloadSingle(${idx})" class="p-2 text-slate-400 hover:text-brand-600 rounded hover:bg-brand-100 transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        // Global function for onclick in HTML
+        window.downloadSingle = (idx) => {
+            const file = state.splitFiles[idx];
+            const blob = new Blob([file.content], { type: "text/csv;charset=utf-8;" });
+            saveAs(blob, file.name);
+        };
+
+        async function downloadZip() {
+            if (state.splitFiles.length === 0) return;
+            
+            const zip = new JSZip();
+            state.splitFiles.forEach(file => {
+                zip.file(file.name, file.content);
+            });
+            
+            const content = await zip.generateAsync({ type: "blob" });
+            const zipName = state.csvData.fileName.replace('.csv', '') + '_split.zip';
+            saveAs(content, zipName);
+        }
+
+        function resetApp() {
+            state.file = null;
+            state.csvData = null;
+            state.splitFiles = [];
+            
+            els.fileInput.value = '';
+            els.viewWorkspace.classList.add('hidden');
+            els.viewUpload.classList.remove('hidden');
+        }
+
+        // --- AI Functionality ---
+        async function analyzeData() {
+            if (!state.csvData) return;
+
+            els.aiLoading.classList.remove('hidden');
+            els.aiPlaceholder.classList.add('hidden');
+            els.btnAnalyze.disabled = true;
+            els.btnAnalyze.classList.add('opacity-50');
+
+            try {
+                // IMPORTANT: In a real production app, never expose API keys in frontend code.
+                // This adheres to the specific prompt instructions to use process.env.API_KEY.
+                // If running locally without a bundler, you may need to manually replace this.
+                const apiKey = process.env.API_KEY; 
+
+                if (!apiKey) {
+                    throw new Error("API Key not found. Please configure process.env.API_KEY.");
+                }
+
+                const ai = new GoogleGenAI({ apiKey });
+                const sample = [state.csvData.header.join(','), ...state.csvData.rows.slice(0, 5).map(r => r.join(','))].join('\n');
+                
+                const prompt = `Analyze this CSV snippet (Header + 5 rows):\n${sample}\n\nProvide a 2-sentence summary of what this dataset contains and detect any potential anomalies.`;
+
+                const response = await ai.models.generateContent({
+                    model: 'gemini-3-flash-preview',
+                    contents: prompt,
+                });
+
+                els.aiResult.innerHTML = `<p>${response.text}</p>`;
+                els.aiResult.classList.remove('hidden');
+            } catch (err) {
+                console.error(err);
+                els.aiResult.innerHTML = `<p class="text-red-500">Analysis failed: ${err.message}</p>`;
+                els.aiResult.classList.remove('hidden');
+            } finally {
+                els.aiLoading.classList.add('hidden');
+                els.btnAnalyze.disabled = false;
+                els.btnAnalyze.classList.remove('opacity-50');
+            }
+        }
+    </script>
+</body>
+</html>
